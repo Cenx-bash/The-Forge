@@ -1,7 +1,7 @@
-# Matrix Forge
+# The Forge
 
 <p align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:00ff99,100:00cc66&height=180&section=header&text=NEON-GENESIS&fontSize=42&fontColor=00ff99&animation=fadeIn" />
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:00ff99,100:00cc66&height=180&section=header&text=The Forge&fontSize=42&fontColor=00ff99&animation=fadeIn" />
 </p>
 
 <p align="center">
@@ -64,7 +64,7 @@ This stack evolves as the era evolves.
 
 ## 📂 Repository Structure
 
-Matrix-Forge/
+Forge/
 ├── systems/        # Architected systems & logic
 ├── experiments/    # Tests, concepts, prototypes
 ├── projects/       # Main builds
