@@ -1,4 +1,3 @@
-// File: AdvancedNetworkFirewall.java
 package com.firewall.expert;
 
 import java.io.*;
