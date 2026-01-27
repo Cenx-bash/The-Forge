@@ -11,5 +11,4 @@ A modular chat application for interacting with Large Language Models (LLMs) wit
 - 🔧 **Configurable** - Easy configuration via environment variables
 - 🔌 **Multi-LLM Support** - Ready for OpenAI, Anthropic, and other LLMs
 
-## Project Structure
 
