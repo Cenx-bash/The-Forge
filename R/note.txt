@@ -1,1 +1,17 @@
+This R code includes:
 
+Basic operations and functions
+
+Data frame manipulation
+
+Data visualization with plots
+
+Custom functions and control structures
+
+File I/O operations
+
+Package usage examples
+
+Lists and matrices
+
+Random data generation and simulations
