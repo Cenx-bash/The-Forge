@@ -1,0 +1,3 @@
+Description: Custom system administration bash script
+Formal Purpose: Automated system maintenance or configuration utility
+Content Classification: Operational Script / System Utility
