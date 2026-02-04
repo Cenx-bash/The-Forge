@@ -1,0 +1,4 @@
+Description: Project vision, purpose, and development philosophy
+Formal Purpose: Documents project inspiration, core values, and development principles
+Content Classification: Project Governance / Vision Statement
+Retention Period: Permanent - Core project documentation
