@@ -1,0 +1,5 @@
+Description: Development procedures and implementation standards
+Formal Purpose: Documents coding standards, architectural decisions, and implementation patterns
+Content Classification: Development Procedures / Technical Guidelines
+Retention Period: Maintain until superseded by updated version
+
