@@ -1,0 +1,1 @@
+g++ main.cpp -o atm.exe -O2
