@@ -1,0 +1,562 @@
+/*
+╔══════════════════════════════════════════════════════════════════════════════╗
+║        F E I N   B A N K I N G   T E R M I N A L   ·   v5.0  .               ║
+║        Philippine Banking Simulation  ·  Professional Terminal UI            ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  Authors:  Dimabayao, Karl Ancel T.                                          ║
+║            Ramos, Timothy Christopher A.                                     ║
+║            Odiame, Rodge Ravin C.                                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+*/
+
+// ════════════════════════════════════════════════════════════════════════
+//  DESIGN NOTES
+// ════════════════════════════════════════════════════════════════════════
+//
+//  Box Hierarchy (3 levels, consistent widths):
+//
+//    Level 1 — HEAVY BOX  (╔═══╗)  Width = W = 74
+//              Used for: screen header / brand banner / account panel
+//              Functions: hTop() hBot() hMid() hBlank() hRow() hRowC() hKV()
+//
+//    Level 2 — LIGHT BOX  (┌───┐)  Width = W - 6, indent = 2 spaces
+//              Used for: section titles, menus, data panels, previews
+//              Functions: lTop() lBot() lMid() lBlank() lRow() lRowC() lKV()
+//
+//    Level 3 — RECEIPT BOX  (╒═══╕ + ┌───┐ sides)
+//              Used for: transaction receipts only
+//              Functions: rTop() rRow() rDiv() rBot()
+//
+//  Color System — MONOTONE only:
+//    fWHT  [97m  Bright white  — primary content, values, highlights
+//    fSIL  [37m  Silver        — secondary text, labels, descriptions
+//    fGRY  [90m  Dark grey     — borders, muted content, timestamps
+//    BOLD              Emphasis modifier (no color change)
+//    DIM               Deemphasis modifier (no color change)
+//
+//  Widths:
+//    W    = 74   total terminal columns
+//    IW   = 70   heavy box inner width  (W - 4)
+//    LIW  = 66   light box inner width  (W - 8)
+//
+//  Key Functions:
+//    screenHeader()   — clears screen, draws brand + optional account panel
+//    sectionTitle()   — single-row light box with section name + arrow icon
+//    showMenu()       — numbered list inside a light box
+//    animBar()        — animated fill bar with label, inside a light box
+//    spinnerLine()    — braille spinner with completion check
+//    typeOut()        — character-by-character typing effect
+//    breakBills()     — recursive bill denomination calculator
+//    logTx()          — appends transaction to transactions.csv
+//    doWithdraw()     — full withdrawal flow (validation→preview→commit→receipt)
+//    doTransfer()     — full transfer flow  (validation→preview→commit→receipt)
+//
+// ════════════════════════════════════════════════════════════════════════
+//  FEES REFERENCE
+// ════════════════════════════════════════════════════════════════════════
+//
+//  Bank           Local Fee   Interbank Fee   Daily Limit
+//  ──────────────────────────────────────────────────────
+//  BDO            PHP 25      PHP 150         PHP 50,000
+//  BPI            PHP 20      PHP 125         PHP 75,000
+//  Metrobank      PHP 30      PHP 200         PHP 100,000
+//  Security Bank  PHP 15      PHP 100         PHP 60,000
+//
+//  ATM Cassettes:
+//    1000-bill cassette  :  500 bills  =  PHP 500,000
+//    500-bill  cassette  :  500 bills  =  PHP 250,000
+//    Total initial cash  :             =  PHP 750,000
+//
+// ════════════════════════════════════════════════════════════════════════
+//  SECURITY MODEL
+// ════════════════════════════════════════════════════════════════════════
+//
+//  PIN Storage: Caesar cipher +3, pipe-delimited ASCII ordinals
+//    Example:  "1234" → "52|53|54|55"
+//    Function: encode(pin) / decode(encodedPin)
+//
+//  PIN Entry: 3-attempt lockout, visual attempt indicator (█ vs ░)
+//  Admin:     3-attempt lockout on passcode entry
+//  Session:   No persistent state; each login is a fresh session
+//
+// ════════════════════════════════════════════════════════════════════════
+
+
+#include <iostream>
+#include <vector>
+#include <string>
+#include <fstream>
+#include <ctime>
+#include <iomanip>
+#include <limits>
+#include <sstream>
+#include <algorithm>
+#include <cmath>
+
+#ifdef _WIN32
+  #include <windows.h>
+  #define MSLEEP(ms) Sleep(ms)
+#else
+  #include <unistd.h>
+  #define MSLEEP(ms) usleep((ms)*1000)
+#endif
+
+using namespace std;
+
+// ════════════════════════════════════════════════════════════════════════
+//  ANSI  ·  MONOTONE PALETTE  (white / silver / grey)
+// ════════════════════════════════════════════════════════════════════════
+
+#define RST   "\033[0m"
+#define BOLD  "\033[1m"
+#define DIM   "\033[2m"
+
+#define fWHT  "\033[97m"   // bright white   — primary / active
+#define fSIL  "\033[37m"   // silver          — secondary / labels
+#define fGRY  "\033[90m"   // dark grey       — muted / borders
+
+#define CLS   "\033[2J\033[H"
+#define HID   "\033[?25l"
+#define SHW   "\033[?25h"
+
+// ── Heavy border characters
+#define HV_TL "╔"
+#define HV_TR "╗"
+#define HV_BL "╚"
+#define HV_BR "╝"
+#define HV_H  "═"
+#define HV_V  "║"
+#define HV_ML "╠"
+#define HV_MR "╣"
+
+// ── Light border characters
+#define LT_TL "┌"
+#define LT_TR "┐"
+#define LT_BL "└"
+#define LT_BR "┘"
+#define LT_H  "─"
+#define LT_V  "│"
+#define LT_ML "├"
+#define LT_MR "┤"
+
+// ── Symbols
+#define S_DOT   "·"
+#define S_BULL  "●"
+#define S_DIAM  "◆"
+#define S_CHK   "✔"
+#define S_CRS   "✖"
+#define S_ARR   "▶"
+#define S_LOCK  "◉"
+#define S_BLK   "█"
+#define S_LIT   "░"
+#define S_HALF  "▓"
+#define S_DASH  "—"
+
+// ════════════════════════════════════════════════════════════════════════
+//  LAYOUT
+// ════════════════════════════════════════════════════════════════════════
+
+const int W = 74;          // total terminal width
+const int IW = W - 4;      // inner width (inside "║ " and " ║")
+
+// ════════════════════════════════════════════════════════════════════════
+//  BANK CONSTANTS
+// ════════════════════════════════════════════════════════════════════════
+
+const int NB = 4;
+const string BNAMES[NB]  = { "BDO", "BPI", "Metrobank", "Security Bank" };
+const double LFEE[NB]    = { 25.0,  20.0,  30.0,        15.0  };
+const double IFEE[NB]    = { 150.0, 125.0, 200.0,       100.0 };
+const double DLIMIT[NB]  = { 50000, 75000, 100000,      60000 };
+
+const int ND       = 2;
+int DENOM[ND]      = { 1000, 500  };
+int DCNT[ND]       = { 500,  500  };
+
+// ════════════════════════════════════════════════════════════════════════
+//  ENCODING  (Caesar +3, pipe-delimited)
+// ════════════════════════════════════════════════════════════════════════
+
+string encode(const string& s) {
+    string r;
+    for (int i = 0; i < (int)s.size(); i++) {
+        r += to_string((int)s[i] + 3);
+        if (i < (int)s.size()-1) r += "|";
+    }
+    return r;
+}
+
+string decode(const string& e) {
+    string r, tok;
+    for (int i = 0; i <= (int)e.size(); i++) {
+        if (i == (int)e.size() || e[i]=='|') {
+            if (!tok.empty()) { r += (char)(stoi(tok)-3); tok = ""; }
+        } else tok += e[i];
+    }
+    return r;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  DATA STRUCTURES
+// ════════════════════════════════════════════════════════════════════════
+
+struct TxRecord {
+    string type;
+    double amount;
+    double fee;
+    string timestamp;
+    int    direction;   // +1 credit  /  -1 debit
+};
+
+struct Account {
+    string card;
+    string encPin;
+    string name;
+    string bank;
+    string accType;     // "Local" | "International"
+    double balance;
+    vector<TxRecord> history;
+};
+
+vector<Account> ACCOUNTS;
+string ADMIN_PASS;
+
+// ════════════════════════════════════════════════════════════════════════
+//  GENERAL UTILITIES
+// ════════════════════════════════════════════════════════════════════════
+
+void sleep_ms(int ms) { MSLEEP(ms); }
+
+string rep(const string& s, int n) {
+    string r; for (int i = 0; i < n; i++) r += s; return r;
+}
+
+string padR(const string& s, int w) {
+    if ((int)s.size() >= w) return s.substr(0, w);
+    return s + string(w - (int)s.size(), ' ');
+}
+string padL(const string& s, int w) {
+    if ((int)s.size() >= w) return s.substr(0, w);
+    return string(w - (int)s.size(), ' ') + s;
+}
+string padC(const string& s, int w) {
+    int l = (w - (int)s.size()) / 2; if (l < 0) l = 0;
+    int r = w - (int)s.size() - l;   if (r < 0) r = 0;
+    return string(l, ' ') + s + string(r, ' ');
+}
+
+// Format Philippine Peso:  50000  →  "PHP 50,000.00"
+string php(double v) {
+    ostringstream o; o << fixed << setprecision(2) << v;
+    string n = o.str();
+    int dot   = (int)n.find('.');
+    string ip = n.substr(0, dot), dp = n.substr(dot);
+    string fmt; int cnt = 0;
+    for (int i = (int)ip.size()-1; i >= 0; i--) {
+        if (cnt > 0 && cnt % 3 == 0) fmt = "," + fmt;
+        fmt = ip[i] + fmt; cnt++;
+    }
+    return "PHP " + fmt + dp;
+}
+
+// Mask card:  "1234 **** **** 5678"
+string maskCard(const string& c) {
+    if ((int)c.size() != 16) return c;
+    return c.substr(0,4) + " **** **** " + c.substr(12,4);
+}
+
+bool isDigits(const string& s) {
+    for (char c : s) if (c < '0' || c > '9') return false;
+    return !s.empty();
+}
+
+string nowDate() {
+    time_t t = time(0); tm* tm = localtime(&t);
+    ostringstream o;
+    o << setfill('0') << setw(2) << (tm->tm_mon+1) << "/"
+      << setw(2) << tm->tm_mday << "/" << (tm->tm_year+1900);
+    return o.str();
+}
+string nowTime() {
+    time_t t = time(0); tm* tm = localtime(&t);
+    ostringstream o;
+    o << setfill('0') << setw(2) << tm->tm_hour << ":"
+      << setw(2) << tm->tm_min  << ":" << setw(2) << tm->tm_sec;
+    return o.str();
+}
+string nowFull() { return nowDate() + "  " + nowTime(); }
+
+bool inMaintWindow() {
+    time_t t = time(0); tm* tm = localtime(&t);
+    return tm->tm_hour == 8 && tm->tm_min <= 15;
+}
+
+int bankIdx(const string& b) {
+    for (int i = 0; i < NB; i++) if (BNAMES[i] == b) return i;
+    return -1;
+}
+int findAccount(const string& card) {
+    for (int i = 0; i < (int)ACCOUNTS.size(); i++)
+        if (ACCOUNTS[i].card == card) return i;
+    return -1;
+}
+double totalCash() {
+    double t = 0;
+    for (int i = 0; i < ND; i++) t += (double)DENOM[i] * DCNT[i];
+    return t;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  RECURSION  — bill breakdown
+// ════════════════════════════════════════════════════════════════════════
+
+void breakBills(double amt, int& b1000, int& b500) {
+    if (amt <= 0) return;
+    if (amt >= 1000) { b1000++; breakBills(amt - 1000, b1000, b500); }
+    else if (amt >= 500) { b500++; breakBills(amt - 500, b1000, b500); }
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  LOGGING
+// ════════════════════════════════════════════════════════════════════════
+
+void logTx(const string& card, const string& type, double amt, double fee) {
+    ofstream f("transactions.csv", ios::app);
+    if (f.is_open()) {
+        f << nowDate() << "," << nowTime() << "," << card << ","
+          << type << "," << fixed << setprecision(2) << amt << "," << fee << "\n";
+        f.close();
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  DRAWING ENGINE  ·  all boxes use same W constant — no drift
+// ════════════════════════════════════════════════════════════════════════
+
+/*  HEAVY BOX  — outer frame  (╔═══╗  ║   ║  ╚═══╝)
+    Every row is exactly W characters wide.
+    Content area = W - 4  (║·<content>·║, one space each side)          */
+
+void hTop() {
+    cout << BOLD << fGRY << HV_TL << rep(HV_H, W-2) << HV_TR << RST << "\n";
+}
+void hBot() {
+    cout << BOLD << fGRY << HV_BL << rep(HV_H, W-2) << HV_BR << RST << "\n";
+}
+void hMid() {
+    cout << BOLD << fGRY << HV_ML << rep(HV_H, W-2) << HV_MR << RST << "\n";
+}
+void hBlank() {
+    cout << BOLD << fGRY << HV_V << RST << string(W-2, ' ') << BOLD << fGRY << HV_V << RST << "\n";
+}
+
+// Left-aligned content row inside heavy box
+// plain = raw string (no ANSI) used for length, display = styled version
+void hRow(const string& plain, const string& display) {
+    int pad = IW - (int)plain.size(); if (pad < 0) pad = 0;
+    cout << BOLD << fGRY << HV_V << RST
+         << " " << display << string(pad - 1, ' ')
+         << " " << BOLD << fGRY << HV_V << RST << "\n";
+}
+
+// Centered content row inside heavy box
+void hRowC(const string& plain, const string& display) {
+    int l = (IW - (int)plain.size()) / 2; if (l < 0) l = 0;
+    int r = IW - (int)plain.size() - l;   if (r < 0) r = 0;
+    cout << BOLD << fGRY << HV_V << RST
+         << string(l, ' ') << display << string(r, ' ')
+         << BOLD << fGRY << HV_V << RST << "\n";
+}
+
+// Key / value row inside heavy box — label left, value right
+void hKV(const string& label, const string& val, bool hiVal = false) {
+    string L = "  " + label;
+    string R = val + "  ";
+    int pad = IW - (int)L.size() - (int)R.size(); if (pad < 0) pad = 0;
+    cout << BOLD << fGRY << HV_V << RST
+         << " " << DIM << fSIL << L << RST
+         << string(pad, ' ')
+         << (hiVal ? string(BOLD) + fWHT : string(fSIL)) << R << RST
+         << BOLD << fGRY << HV_V << RST << "\n";
+}
+
+/*  LIGHT BOX  — inner panels  (┌───┐  │   │  └───┘)
+    Indented 2 spaces, inner width = W - 8                                */
+
+const int LIW = W - 8;   // light inner width
+
+void lTop() {
+    cout << "  " << fGRY << LT_TL << rep(LT_H, W-6) << LT_TR << RST << "\n";
+}
+void lBot() {
+    cout << "  " << fGRY << LT_BL << rep(LT_H, W-6) << LT_BR << RST << "\n";
+}
+void lMid() {
+    cout << "  " << fGRY << LT_ML << rep(LT_H, W-6) << LT_MR << RST << "\n";
+}
+void lBlank() {
+    cout << "  " << fGRY << LT_V << RST << string(W-6, ' ') << fGRY << LT_V << RST << "\n";
+}
+
+// Left-aligned row in light box
+void lRow(const string& plain, const string& display) {
+    int pad = LIW - (int)plain.size(); if (pad < 0) pad = 0;
+    cout << "  " << fGRY << LT_V << RST
+         << " " << display << string(pad - 1, ' ')
+         << " " << fGRY << LT_V << RST << "\n";
+}
+
+// Centered row in light box
+void lRowC(const string& plain, const string& display) {
+    int l = (LIW - (int)plain.size()) / 2; if (l < 0) l = 0;
+    int r = LIW - (int)plain.size() - l;   if (r < 0) r = 0;
+    cout << "  " << fGRY << LT_V << RST
+         << string(l, ' ') << display << string(r, ' ')
+         << fGRY << LT_V << RST << "\n";
+}
+
+// Key / value row in light box
+void lKV(const string& label, const string& val, bool hiVal = false) {
+    string L = "  " + padR(label, 22);
+    string R = val + "  ";
+    int pad = LIW - (int)L.size() - (int)R.size(); if (pad < 0) pad = 0;
+    cout << "  " << fGRY << LT_V << RST
+         << " " << DIM << fSIL << L << RST
+         << string(pad, ' ')
+         << (hiVal ? string(BOLD) + fWHT : string(fSIL)) << R << RST
+         << fGRY << LT_V << RST << "\n";
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  ANIMATED ELEMENTS
+// ════════════════════════════════════════════════════════════════════════
+
+void animBar(const string& label, int ms = 700) {
+    const int BAR = 38;
+    cout << "\n";
+    lTop();
+    lRow(label, string(fSIL) + label + RST);
+    // progress bar row — plain = BAR+4 chars
+    string plain(BAR + 4, ' ');
+    cout << "  " << fGRY << LT_V << RST << "  " << fGRY << "[" << RST;
+    cout.flush();
+    for (int i = 0; i < BAR; i++) {
+        sleep_ms(ms / BAR);
+        cout << fWHT << S_BLK << RST;
+        cout.flush();
+    }
+    cout << fGRY << "]" << RST;
+    int rpad = LIW - BAR - 4 - 1; if (rpad < 0) rpad = 0;
+    cout << string(rpad, ' ') << " " << fGRY << LT_V << RST << "\n";
+    string done = "  " + string(S_CHK) + "  Complete";
+    lRow(done, string(BOLD) + fWHT + done + RST);
+    lBot();
+}
+
+void spinnerLine(const string& label) {
+    const char* fr[] = {"⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"};
+    for (int i = 0; i < 22; i++) {
+        cout << "\r  " << fSIL << fr[i%10] << RST << "  " << DIM << fSIL << label << RST << "   ";
+        cout.flush(); sleep_ms(55);
+    }
+    cout << "\r  " << BOLD << fWHT << S_CHK << RST << "  " << fWHT << label << RST << "   \n";
+}
+
+void typeOut(const string& s, int d = 13) {
+    for (char c : s) { cout << c; cout.flush(); sleep_ms(d); }
+    cout << "\n";
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  STATUS MESSAGES  (outside any box, indented)
+// ════════════════════════════════════════════════════════════════════════
+
+void msgOK  (const string& m) { cout << "\n  " << BOLD << fWHT << S_CHK << "  " << m << RST << "\n"; }
+void msgERR (const string& m) { cout << "\n  " << BOLD << fWHT << S_CRS << "  " << m << RST << "\n"; }
+void msgINFO(const string& m) { cout << "\n  " << fSIL  << S_DIAM << "  " << m << RST << "\n"; }
+void msgWARN(const string& m) { cout << "\n  " << BOLD << fWHT << "!  " << m << RST << "\n"; }
+
+void pressEnter(const string& lbl = "Press ENTER to continue") {
+    cout << "\n  " << DIM << fGRY << S_DOT << S_DOT << S_DOT << "  " << fSIL << lbl << RST << " ";
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    cin.get();
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  INPUT PROMPTS
+// ════════════════════════════════════════════════════════════════════════
+
+string inputStr(const string& lbl) {
+    cout << "\n  " << BOLD << fWHT << lbl << RST
+         << "\n  " << fGRY << "  └─> " << RST << fWHT;
+    string v; cin >> v; cout << RST; return v;
+}
+
+double inputDbl(const string& lbl) {
+    cout << "\n  " << BOLD << fWHT << lbl << RST
+         << "\n  " << fGRY << "  └─> PHP " << RST << fWHT;
+    double v; cin >> v; cout << RST; return v;
+}
+
+int inputInt(const string& lbl, int lo, int hi) {
+    while (true) {
+        cout << "\n  " << BOLD << fWHT << lbl << RST
+             << "\n  " << fGRY << "  └─> " << RST << fWHT;
+        int v;
+        if (cin >> v && v >= lo && v <= hi) { cout << RST; return v; }
+        cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cout << RST;
+        msgERR("Please enter a number from " + to_string(lo) + " to " + to_string(hi) + ".");
+    }
+}
+
+string inputPIN(const string& lbl) {
+    cout << "\n  " << BOLD << fWHT << string(S_LOCK) + "  " + lbl << RST
+         << "\n  " << fGRY << "  └─> " << RST << fWHT;
+    string v; cin >> v; cout << RST; return v;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  SCREEN HEADER  — printed at top of every screen
+// ════════════════════════════════════════════════════════════════════════
+
+void screenHeader(const string& name = "", const string& bank = "",
+                  const string& accType = "", double balance = -1.0) {
+    cout << CLS << HID;
+
+    // ── Brand box
+    hTop();
+    hBlank();
+    hRowC("FEIN BANKING TERMINAL",
+          string(BOLD) + fWHT + "FEIN BANKING TERMINAL" + RST);
+    hRowC("Secure  " + string(S_DIAM) + "  Reliable  " + string(S_DIAM) + "  Always Available",
+          string(DIM) + fSIL + "Secure  " + S_DIAM + "  Reliable  " + S_DIAM + "  Always Available" + RST);
+    hBlank();
+
+    // Date + time, flush right
+    {
+        string dtL = "  " + string(S_DIAM) + "  " + nowDate();
+        string dtR = nowTime() + "  ";
+        int pad = IW - (int)dtL.size() - (int)dtR.size(); if (pad < 0) pad = 0;
+        cout << BOLD << fGRY << HV_V << RST
+             << " " << DIM << fSIL << dtL << RST
+             << string(pad, ' ')
+             << DIM << fSIL << dtR << RST
+             << " " << BOLD << fGRY << HV_V << RST << "\n";
+    }
+
+    // ── Account panel — only when logged in
+    if (!name.empty()) {
+        hMid();
+        hBlank();
+
+        // Name left  /  account type right
+        {
+            string L = "  " + string(S_BULL) + "  " + name;
+            string R = accType + "  ";
+            int pad = IW - (int)L.size() - (int)R.size(); if (pad < 0) pad = 0;
+            cout << BOLD << fGRY << HV_V << RST
+                 << " " << BOLD << fWHT << L << RST
+                 << string(pad, ' ')
+                 << DIM << fSIL << R << RST
+                 << " " << BOLD << fGRY << HV_V << RST << "\n
