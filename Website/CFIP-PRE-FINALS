@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Logical-Mathematical Intelligence</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Space+Mono:wght@400;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f4f0;
+    --ink: #1a1a18;
+    --mid: #6b6b66;
+    --light: #c8c7c0;
+    --paper: #efefea;
+    --accent: #2e2e2c;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Courier Prime', monospace;
+    overflow: hidden;
+  }
+
+  /* HEADER */
+  header {
+    position: fixed; top: 0; left: 0; right: 0;
+    z-index: 100;
+    padding: 18px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--bg);
+    border-bottom: 1px solid var(--light);
+  }
+  header .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--mid);
+  }
+  header .title {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--ink);
+    text-transform: uppercase;
+  }
+  header .hint {
+    font-size: 10px;
+    color: var(--mid);
+    letter-spacing: 0.15em;
+  }
+
+  /* CANVAS */
+  #canvas {
+    position: fixed;
+    top: 57px; left: 0; right: 0; bottom: 0;
+    overflow: hidden;
+    cursor: grab;
+  }
+  #canvas:active { cursor: grabbing; }
+
+  #world {
+    position: absolute;
+    width: 3200px; height: 2400px;
+    transform-origin: 0 0;
+  }
+
+  /* SVG LINES */
+  #lines {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+
+  /* NODES */
+  .node {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+
+  .node:hover .node-box { border-color: var(--ink); }
+
+  .node-box {
+    background: var(--bg);
+    border: 1px solid var(--light);
+    padding: 10px 16px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    position: relative;
+  }
+  .node-box:hover {
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+
+  .node-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--mid);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .node-title {
+    font-family: 'Courier Prime', monospace;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  .node-sub {
+    font-size: 11px;
+    color: var(--mid);
+    margin-top: 4px;
+    line-height: 1.5;
+    max-width: 180px;
+  }
+
+  /* CENTER NODE */
+  .node-center .node-box {
+    background: var(--ink);
+    border-color: var(--ink);
+    padding: 20px 32px;
+  }
+  .node-center .node-label { color: var(--light); }
+  .node-center .node-title {
+    color: var(--bg);
+    font-size: 18px;
+  }
+  .node-center .node-sub { color: var(--light); max-width: 220px; }
+
+  /* BRANCH COLORS (all monochrome variations) */
+  .branch-a .node-box { border-color: var(--ink); }
+  .branch-b .node-box { border-style: dashed; }
+  .branch-c .node-box { background: var(--paper); }
+  .branch-d .node-box { }
+  .branch-e .node-box { border-width: 2px; }
+  .branch-f .node-box { background: var(--accent); border-color: var(--accent); }
+  .branch-f .node-title { color: var(--bg); }
+  .branch-f .node-label { color: var(--light); }
+
+  /* TOOLTIP */
+  .tooltip {
+    position: fixed;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: var(--bg);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    padding: 8px 18px;
+    letter-spacing: 0.1em;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 200;
+  }
+  .tooltip.show { opacity: 1; }
+
+  /* COUNTER */
+  .node-counter {
+    position: absolute;
+    top: -8px; right: -8px;
+    width: 18px; height: 18px;
+    background: var(--ink);
+    color: var(--bg);
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    display: flex; align-items: center; justify-content: center;
+    letter-spacing: 0;
+    border-radius: 0;
+  }
+
+  /* ZOOM CONTROLS */
+  .zoom-controls {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    display: flex; gap: 1px;
+    z-index: 200;
+  }
+  .zoom-btn {
+    width: 36px; height: 36px;
+    background: var(--ink);
+    color: var(--bg);
+    border: none;
+    font-family: 'Space Mono', monospace;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+  }
+  .zoom-btn:hover { background: var(--mid); }
+
+  /* LEGEND */
+  .legend {
+    position: fixed;
+    top: 80px; right: 24px;
+    z-index: 100;
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: var(--mid);
+    line-height: 2;
+    text-transform: uppercase;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .legend-dot {
+    width: 12px; height: 1px;
+    background: var(--mid);
+  }
+  .legend-dot.solid { height: 1px; }
+  .legend-dot.dashed { border-top: 1px dashed var(--mid); background: none; }
+
+  /* INTRO FADE */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translate(-50%, calc(-50% + 12px)); }
+    to   { opacity: 1; transform: translate(-50%, -50%); }
+  }
+  .node { animation: fadeUp 0.5s ease both; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">CIFP 102 — Pre-final</span>
+  <span class="title">Logical-Mathematical Intelligence</span>
+  <span class="hint">drag · scroll to zoom</span>
+</header>
+
+<div id="canvas">
+  <div id="world">
+    <svg id="lines" xmlns="http://www.w3.org/2000/svg"></svg>
+    <!-- nodes injected by JS -->
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<div class="zoom-controls">
+  <button class="zoom-btn" id="zoomOut">−</button>
+  <button class="zoom-btn" id="zoomIn">+</button>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><span class="legend-dot solid"></span> main branch</div>
+  <div class="legend-item"><span class="legend-dot dashed"></span> sub-branch</div>
+</div>
+
+<script>
+// ─── DATA ───────────────────────────────────────────────────────────────────
+const CENTER = { x: 1600, y: 1200 };
+
+const nodes = [
+  // ROOT
+  {
+    id: 'root', x: 1600, y: 1200,
+    label: 'Core Intelligence',
+    title: 'LOGICAL-MATHEMATICAL',
+    sub: 'Howard Gardner\'s\nMultiple Intelligences',
+    cls: 'node-center', branch: null,
+    tooltip: 'The capacity to think conceptually, reason abstractly, and detect patterns.'
+  },
+
+  // ── BRANCH 1: PROGRAMMING ────────────────────────────────────────
+  {
+    id: 'prog', x: 960, y: 760,
+    label: '01 — Passion',
+    title: 'PROGRAMMING',
+    sub: 'Logic in code form',
+    cls: '', branch: 'a', delay: 100,
+    tooltip: 'Writing code exercises sequential logic, pattern recognition, and problem decomposition.'
+  },
+  {
+    id: 'prog-1', x: 680, y: 560,
+    label: '',
+    title: 'Algorithms',
+    sub: 'Sorting · Searching\nGraph traversal',
+    cls: '', branch: 'a', delay: 150,
+    tooltip: 'Step-by-step problem-solving procedures.'
+  },
+  {
+    id: 'prog-2', x: 700, y: 800,
+    label: '',
+    title: 'Debugging',
+    sub: 'Finding logical errors\nin code flow',
+    cls: '', branch: 'a', delay: 200,
+    tooltip: 'Systematic elimination — pure logical reasoning.'
+  },
+  {
+    id: 'prog-3', x: 820, y: 1020,
+    label: '',
+    title: 'Data Structures',
+    sub: 'Arrays · Trees\nGraphs · Stacks',
+    cls: '', branch: 'a', delay: 250,
+    tooltip: 'Organizing information systematically.'
+  },
+  {
+    id: 'prog-4', x: 480, y: 680,
+    label: '',
+    title: 'Problem Solving',
+    sub: 'Breaking big\nproblems down',
+    cls: '', branch: 'a', delay: 300,
+    tooltip: 'Decomposition is the hallmark of mathematical thinking.'
+  },
+
+  // ── BRANCH 2: CHESS ──────────────────────────────────────────────
+  {
+    id: 'chess', x: 1040, y: 1680,
+    label: '02 — Strategy',
+    title: 'CHESS',
+    sub: 'The ultimate\nlogical game',
+    cls: '', branch: 'b', delay: 100,
+    tooltip: 'Chess builds pattern recognition, foresight, and abstract spatial reasoning.'
+  },
+  {
+    id: 'chess-1', x: 820, y: 1900,
+    label: '',
+    title: 'Openings',
+    sub: 'Sicilian · Caro-Kann\nKing\'s Indian',
+    cls: '', branch: 'b', delay: 150,
+    tooltip: 'Memorized sequences that set up logical advantages.'
+  },
+  {
+    id: 'chess-2', x: 1100, y: 2000,
+    label: '',
+    title: 'Tactics',
+    sub: 'Fork · Pin · Skewer\nDiscovered attack',
+    cls: '', branch: 'b', delay: 200,
+    tooltip: 'Short-range combinations requiring precise calculation.'
+  },
+  {
+    id: 'chess-3', x: 680, y: 1700,
+    label: '',
+    title: 'Pattern Recognition',
+    sub: 'Seeing board\nshapes instantly',
+    cls: '', branch: 'b', delay: 250,
+    tooltip: 'Grand masters recognize ~50,000 board patterns.'
+  },
+  {
+    id: 'chess-4', x: 780, y: 2060,
+    label: '',
+    title: 'Endgame Theory',
+    sub: 'King + Pawn\nRook endings',
+    cls: '', branch: 'b', delay: 300,
+    tooltip: 'Pure mathematical calculation of winning positions.'
+  },
+
+  // ── BRANCH 3: MATHEMATICS ────────────────────────────────────────
+  {
+    id: 'math', x: 2240, y: 760,
+    label: '03 — Foundation',
+    title: 'MATHEMATICS',
+    sub: 'The language\nof the universe',
+    cls: '', branch: 'c', delay: 100,
+    tooltip: 'Mathematics is the purest expression of logical-mathematical intelligence.'
+  },
+  {
+    id: 'math-1', x: 2480, y: 580,
+    label: '',
+    title: 'Number Theory',
+    sub: 'Primes · Proofs\nModular arithmetic',
+    cls: '', branch: 'c', delay: 150,
+    tooltip: 'The study of integers and their relationships.'
+  },
+  {
+    id: 'math-2', x: 2520, y: 820,
+    label: '',
+    title: 'Discrete Math',
+    sub: 'Logic · Sets · Graphs\nCombinatorics',
+    cls: '', branch: 'c', delay: 200,
+    tooltip: 'The mathematics underlying computer science.'
+  },
+  {
+    id: 'math-3', x: 2340, y: 1000,
+    label: '',
+    title: 'Statistics',
+    sub: 'Probability · Inference\nData analysis',
+    cls: '', branch: 'c', delay: 250,
+    tooltip: 'Mathematical reasoning under uncertainty.'
+  },
+  {
+    id: 'math-4', x: 2680, y: 680,
+    label: '',
+    title: 'Calculus',
+    sub: 'Rates of change\nAreas & integrals',
+    cls: '', branch: 'c', delay: 300,
+    tooltip: 'The mathematics of continuous change.'
+  },
+
+  // ── BRANCH 4: ANALYTICAL THINKING ───────────────────────────────
+  {
+    id: 'think', x: 2240, y: 1680,
+    label: '04 — Mindset',
+    title: 'ANALYTICAL THINKING',
+    sub: 'Reasoning from\nevidence to truth',
+    cls: '', branch: 'e', delay: 100,
+    tooltip: 'The ability to break complex problems into logical components.'
+  },
+  {
+    id: 'think-1', x: 2520, y: 1540,
+    label: '',
+    title: 'Critical Thinking',
+    sub: 'Evaluate claims\nQuestion assumptions',
+    cls: '', branch: 'e', delay: 150,
+    tooltip: 'Disciplined thinking that seeks evidence and sound reasoning.'
+  },
+  {
+    id: 'think-2', x: 2580, y: 1780,
+    label: '',
+    title: 'Systems Thinking',
+    sub: 'See wholes, not\njust parts',
+    cls: '', branch: 'e', delay: 200,
+    tooltip: 'Understanding how components interact in complex systems.'
+  },
+  {
+    id: 'think-3', x: 2440, y: 1960,
+    label: '',
+    title: 'Deductive Logic',
+    sub: 'If A → B, A ∴ B',
+    cls: '', branch: 'e', delay: 250,
+    tooltip: 'Drawing valid conclusions from premises.'
+  },
+  {
+    id: 'think-4', x: 2680, y: 1640,
+    label: '',
+    title: 'Scientific Method',
+    sub: 'Hypothesis\nTest · Conclude',
+    cls: '', branch: 'e', delay: 300,
+    tooltip: 'Structured empirical investigation.'
+  },
+
+  // ── BRANCH 5: LEARNING STRATEGIES ───────────────────────────────
+  {
+    id: 'learn', x: 1600, y: 560,
+    label: '05 — Method',
+    title: 'LEARNING STYLE',
+    sub: 'How logical minds\nbest absorb knowledge',
+    cls: '', branch: 'f', delay: 100,
+    tooltip: 'Logical-mathematical learners thrive with structure, patterns, and classification.'
+  },
+  {
+    id: 'learn-1', x: 1380, y: 360,
+    label: '',
+    title: 'Structured Notes',
+    sub: 'Outlines · Tables\nFlowcharts',
+    cls: '', branch: 'a', delay: 150,
+    tooltip: 'Organizing information hierarchically matches logical brain patterns.'
+  },
+  {
+    id: 'learn-2', x: 1600, y: 280,
+    label: '',
+    title: 'Practice Problems',
+    sub: 'Repetition builds\nlogical muscle',
+    cls: '', branch: 'a', delay: 200,
+    tooltip: 'Active problem-solving reinforces mathematical reasoning.'
+  },
+  {
+    id: 'learn-3', x: 1820, y: 360,
+    label: '',
+    title: 'Mind Mapping',
+    sub: 'Visual connections\nbetween concepts',
+    cls: '', branch: 'a', delay: 250,
+    tooltip: 'Like this very diagram — connecting ideas spatially.'
+  },
+  {
+    id: 'learn-4', x: 1980, y: 480,
+    label: '',
+    title: 'Teach to Learn',
+    sub: 'Explaining forces\ndeep understanding',
+    cls: '', branch: 'a', delay: 300,
+    tooltip: 'The Feynman Technique — if you can\'t explain it simply, you don\'t understand it.'
+  },
+
+  // ── BRANCH 6: MOTIVATION ─────────────────────────────────────────
+  {
+    id: 'motiv', x: 1600, y: 1840,
+    label: '06 — Drive',
+    title: 'MOTIVATION',
+    sub: 'What fuels the\nlogical mind',
+    cls: '', branch: 'd', delay: 100,
+    tooltip: 'Achievement motivation drives logical-mathematical intelligence to excel.'
+  },
+  {
+    id: 'motiv-1', x: 1380, y: 2040,
+    label: '',
+    title: 'Challenge',
+    sub: 'Hard problems\nignite curiosity',
+    cls: '', branch: 'd', delay: 150,
+    tooltip: 'Mastery orientation — the joy of solving difficult problems.'
+  },
+  {
+    id: 'motiv-2', x: 1600, y: 2120,
+    label: '',
+    title: 'Curiosity',
+    sub: 'Why does this\nalways work?',
+    cls: '', branch: 'd', delay: 200,
+    tooltip: 'Intrinsic motivation through the love of understanding.'
+  },
+  {
+    id: 'motiv-3', x: 1820, y: 2040,
+    label: '',
+    title: 'Mastery',
+    sub: 'Progress toward\nperfect execution',
+    cls: '', branch: 'd', delay: 250,
+    tooltip: 'The satisfaction of moving from novice to expert.'
+  },
+];
+
+// ─── CONNECTIONS ────────────────────────────────────────────────────────────
+const edges = [
+  // main branches from root
+  { from: 'root', to: 'prog', thick: true },
+  { from: 'root', to: 'chess', thick: true },
+  { from: 'root', to: 'math', thick: true },
+  { from: 'root', to: 'think', thick: true },
+  { from: 'root', to: 'learn', thick: true },
+  { from: 'root', to: 'motiv', thick: true },
+  // programming
+  { from: 'prog', to: 'prog-1' },
+  { from: 'prog', to: 'prog-2' },
+  { from: 'prog', to: 'prog-3' },
+  { from: 'prog-1', to: 'prog-4' },
+  // chess
+  { from: 'chess', to: 'chess-1' },
+  { from: 'chess', to: 'chess-2' },
+  { from: 'chess', to: 'chess-3' },
+  { from: 'chess-1', to: 'chess-4' },
+  // math
+  { from: 'math', to: 'math-1' },
+  { from: 'math', to: 'math-2' },
+  { from: 'math', to: 'math-3' },
+  { from: 'math-1', to: 'math-4' },
+  // analytical
+  { from: 'think', to: 'think-1' },
+  { from: 'think', to: 'think-2' },
+  { from: 'think', to: 'think-3' },
+  { from: 'think-1', to: 'think-4' },
+  // learning
+  { from: 'learn', to: 'learn-1' },
+  { from: 'learn', to: 'learn-2' },
+  { from: 'learn', to: 'learn-3' },
+  { from: 'learn', to: 'learn-4' },
+  // motivation
+  { from: 'motiv', to: 'motiv-1' },
+  { from: 'motiv', to: 'motiv-2' },
+  { from: 'motiv', to: 'motiv-3' },
+  // cross-links
+  { from: 'prog', to: 'math', dashed: true },
+  { from: 'chess', to: 'think', dashed: true },
+  { from: 'learn', to: 'motiv', dashed: true },
+];
+
+// ─── BUILD DOM ──────────────────────────────────────────────────────────────
+const world = document.getElementById('world');
+const svg   = document.getElementById('lines');
+const tooltip = document.getElementById('tooltip');
+
+const nodeMap = {};
+
+nodes.forEach((n, i) => {
+  const div = document.createElement('div');
+  div.className = `node ${n.cls || ''} ${n.branch ? 'branch-' + n.branch : ''}`;
+  div.style.left = n.x + 'px';
+  div.style.top  = n.y + 'px';
+  div.style.animationDelay = (n.delay || 0) + 'ms';
+  div.dataset.id = n.id;
+
+  div.innerHTML = `
+    <div class="node-box">
+      ${i > 0 ? `<span class="node-counter">${String(i).padStart(2,'0')}</span>` : ''}
+      ${n.label ? `<span class="node-label">${n.label}</span>` : ''}
+      <span class="node-title">${n.title}</span>
+      ${n.sub ? `<div class="node-sub">${n.sub}</div>` : ''}
+    </div>
+  `;
+
+  div.addEventListener('mouseenter', () => {
+    tooltip.textContent = n.tooltip;
+    tooltip.classList.add('show');
+  });
+  div.addEventListener('mouseleave', () => {
+    tooltip.classList.remove('show');
+  });
+
+  world.appendChild(div);
+  nodeMap[n.id] = { el: div, data: n };
+});
+
+// ─── DRAW EDGES ─────────────────────────────────────────────────────────────
+function getCenter(n) {
+  return { x: n.x, y: n.y };
+}
+
+function curvePath(ax, ay, bx, by) {
+  const mx = (ax + bx) / 2;
+  const my = (ay + by) / 2;
+  const cx1 = mx + (ay - by) * 0.18;
+  const cy1 = my + (bx - ax) * 0.18;
+  return `M ${ax} ${ay} Q ${cx1} ${cy1} ${bx} ${by}`;
+}
+
+edges.forEach(e => {
+  const a = nodeMap[e.from].data;
+  const b = nodeMap[e.to].data;
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', curvePath(a.x, a.y, b.x, b.y));
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', e.dashed ? '#c8c7c0' : '#6b6b66');
+  path.setAttribute('stroke-width', e.thick ? '1.5' : '1');
+  if (e.dashed) path.setAttribute('stroke-dasharray', '5 5');
+  svg.appendChild(path);
+});
+
+// ─── PAN & ZOOM ─────────────────────────────────────────────────────────────
+let scale = 0.42;
+let tx = -340, ty = -260;
+let dragging = false, sx = 0, sy = 0, stx = 0, sty = 0;
+
+function applyTransform() {
+  world.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+}
+applyTransform();
+
+const canvas = document.getElementById('canvas');
+
+canvas.addEventListener('mousedown', e => {
+  dragging = true; sx = e.clientX; sy = e.clientY; stx = tx; sty = ty;
+});
+window.addEventListener('mouseup', () => dragging = false);
+window.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  tx = stx + (e.clientX - sx);
+  ty = sty + (e.clientY - sy);
+  applyTransform();
+});
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? -0.04 : 0.04;
+  scale = Math.max(0.2, Math.min(1.8, scale + delta));
+  applyTransform();
+}, { passive: false });
+
+document.getElementById('zoomIn').onclick  = () => { scale = Math.min(1.8, scale + 0.08); applyTransform(); };
+document.getElementById('zoomOut').onclick = () => { scale = Math.max(0.2, scale - 0.08); applyTransform(); };
+
+// touch support
+let lastDist = null;
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    dragging = true;
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+    stx = tx; sty = ty;
+  }
+}, { passive: true });
+canvas.addEventListener('touchend', () => { dragging = false; lastDist = null; });
+canvas.addEventListener('touchmove', e => {
+  if (e.touches.length === 1 && dragging) {
+    tx = stx + (e.touches[0].clientX - sx);
+    ty = sty + (e.touches[0].clientY - sy);
+    applyTransform();
+  } else if (e.touches.length === 2) {
+    const d = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    if (lastDist) { scale = Math.max(0.2, Math.min(1.8, scale * d / lastDist)); applyTransform(); }
+    lastDist = d;
+  }
+}, { passive: true });
+</script>
+</body>
+</html>
